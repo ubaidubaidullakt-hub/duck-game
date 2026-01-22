@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Duck Jump Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: sans-serif; }
+        /* Joystick Styles */
+        #joystick-container {
+            position: absolute; bottom: 50px; left: 30px;
+            width: 100px; height: 100px; background: rgba(255,255,255,0.3);
+            border-radius: 50%; touch-action: none; border: 2px solid white;
+        }
+        #joystick-knob {
+            position: absolute; width: 40px; height: 40px;
+            background: #fff; border-radius: 50%; top: 30px; left: 30px;
+        }
+        /* Jump Button Styles */
+        #jump-button {
+            position: absolute; bottom: 60px; right: 40px;
+            width: 80px; height: 80px; background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%; border: 3px solid white;
+            color: white; font-weight: bold; display: flex;
+            align-items: center; justify-content: center;
+            user-select: none; -webkit-tap-highlight-color: transparent;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="joystick-container"><div id="joystick-knob"></div></div>
+    <div id="jump-button">JUMP</div>
+
+    <script type="module">
+        import * as THREE from 'https://cdn.skypack.dev/three@0.132.2/build/three.module.js';
+        import { GLTFLoader } from 'https://cdn.skypack.dev/three@0.132.2/examples/jsm/loaders/GLTFLoader.js';
+
+        // --- SCENE & RENDERER ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true; // Enable shadows
+        document.body.appendChild(renderer.domElement);
+
+        // --- ENHANCED LIGHTING ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // Brighter base light
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        sunLight.position.set(5, 15, 10);
+        sunLight.castShadow = true;
+        scene.add(sunLight);
+
+        // --- GROUND ---
+        const floorGeo = new THREE.PlaneGeometry(200, 200);
+        const floorMat = new THREE.MeshPhongMaterial({ color: 0x3ea33c });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // --- PHYSICS & MOVEMENT VARIABLES ---
+        let duck;
+        let moveData = { x: 0, y: 0 };
+        let velocityY = 0;
+        let isJumping = false;
+        const gravity = -0.015;
+        const jumpForce = 0.4;
+
+        // --- LOAD DUCK ---
+        const loader = new GLTFLoader();
+        loader.load('duck.glb', (gltf) => {
+            duck = gltf.scene;
+            duck.traverse(n => { if(n.isMesh) n.castShadow = true; });
+            scene.add(duck);
+        });
+
+        camera.position.set(0, 8, 12);
+
+        // --- MOBILE CONTROLS (JOYSTICK) ---
+        const knob = document.getElementById('joystick-knob');
+        window.addEventListener('touchmove', (e) => {
+            const touch = e.touches[0];
+            const rect = document.getElementById('joystick-container').getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            let dx = touch.clientX - centerX;
+            let dy = touch.clientY - centerY;
+            const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 40);
+            const angle = Math.atan2(dy, dx);
+            moveData.x = (Math.cos(angle) * dist) / 40;
+            moveData.y = (Math.sin(angle) * dist) / 40;
+            knob.style.transform = `translate(${moveData.x * 40}px, ${moveData.y * 40}px)`;
+        });
+
+        window.addEventListener('touchend', () => {
+            moveData = { x: 0, y: 0 };
+            knob.style.transform = `translate(0px, 0px)`;
+        });
+
+        // --- JUMP LOGIC ---
+        const jumpBtn = document.getElementById('jump-button');
+        jumpBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (!isJumping) {
+                velocityY = jumpForce;
+                isJumping = true;
+            }
+        });
+
+        // --- ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            if (duck) {
+                // Horizontal Move
+                duck.position.x += moveData.x * 0.15;
+                duck.position.z += moveData.y * 0.15;
+
+                // Vertical Jump (Physics)
+                velocityY += gravity;
+                duck.position.y += velocityY;
+
+                if (duck.position.y <= 0) {
+                    duck.position.y = 0;
+                    velocityY = 0;
+                    isJumping = false;
+                }
+
+                // Rotation
+                if (Math.abs(moveData.x) > 0.1 || Math.abs(moveData.y) > 0.1) {
+                    duck.rotation.y = Math.atan2(moveData.x, moveData.y);
+                }
+
+                // Camera Follow
+                camera.position.x = duck.position.x;
+                camera.position.z = duck.position.z + 12;
+                camera.lookAt(duck.position);
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
